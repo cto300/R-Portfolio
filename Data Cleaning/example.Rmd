@@ -1,0 +1,220 @@
+---
+title: "Data Cleaning"
+author: "Carlos Tejeda Ocampo A011170840"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!-- Loading libraries -->
+```{r loadlib, warning=FALSE, message=FALSE, echo=FALSE}
+library(dplyr)
+library(tidyr)
+
+library(stringr)
+library(lubridate)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+#library(gdata)
+```
+
+# R Data Cleaning
+
+## Ticket Sales Dataset
+
+Data Cleaning of messy Ticket Sales Dataset
+
+```{r loadtickets}
+#sales <- read.csv("sales.csv", stringsAsFactors = FALSE)
+
+url_sales <- 'http://s3.amazonaws.com/assets.datacamp.com/production/course_1294/datasets/sales.csv'
+sales <- read.csv(url_sales, stringsAsFactors=F)
+```
+
+
+### Examine Data
+
+
+```{r examinetickets}
+dim(sales)
+#head(sales)
+names(sales)
+
+
+
+```
+
+### Sumarize Data
+
+```{r summarizetickets}
+#str(sales)
+#summary(sales)
+glimpse(sales)
+
+```
+
+
+### Remove unnecesary columns
+
+The first column is redundant, the second, third and fourth columns contains no relevant information and the last sixteen columns have too many missing values, so we remove them.
+
+```{r remove1tickets}
+sales2 <- sales[,c(6:30)]
+glimpse(sales2)
+
+```
+
+### Separating information from columns
+
+event_date_time and sales_ord_create_dttm include both date and hour in the same value. We need to separate these values to facilitate the analysis.
+
+
+```{r separatetickets}
+sales3 <- separate(sales2, event_date_time, c('event_dt', 'event_time'), sep = " ")
+col <- str_detect(names(sales3),'event')
+glimpse(sales3[,col])
+head(sales3$sales_ord_create_dttm)
+
+# Split sales_ord_create_dttm: sales5
+sales4 <- separate(sales3, sales_ord_create_dttm, c('ord_create_dt', 'ord_create_time'), sep = " ")
+
+## check new columns
+col <- str_detect(names(sales4),'ord_create')
+glimpse(sales4[,col])
+
+```
+
+### Identifying and formatting date and time
+
+```{r datetimetickets}
+date_cols <- str_detect(colnames(sales4), "dt")
+glimpse(sales4[,date_cols])
+
+sales4[, date_cols] <- lapply(sales4[, date_cols], ymd)
+glimpse(sales4[,date_cols])
+
+time_cols <- str_detect(colnames(sales4), "_time")
+glimpse(sales4[,time_cols])
+
+sales4[, time_cols] <- lapply(sales4[, time_cols], hms)
+glimpse(sales4[,time_cols])
+
+
+```
+
+### Combine venue_city and venue_state columns
+```{r combinetickets}
+sales5 <- unite(sales4, venue_city_state, venue_city, venue_state, sep = ", ")
+glimpse(sales5)
+```
+## MBTA Ridership Data
+
+Data Cleaning of messy MBTA Ridership Data
+
+```{r loadmbta}
+#url_mbta <- 'http://s3.amazonaws.com/assets.datacamp.com/production/course_1294/datasets/mbta.xlsx'
+#download.file(url_mbta, 'mbta.xlsx')
+mbta <- read_excel('mbta.xlsx', skip=1)
+glimpse(mbta)
+```
+### Remove unnecesary rows and columns
+```{r removemtba}
+# Remove rows unuseful data
+keep <- !(mbta$mode %in% c('All Modes by Qtr', 'Pct Chg / Yr', 'TOTAL'))
+
+mbta2 <- mbta[keep,]
+mbta3 <- mbta2[,-1]
+glimpse(mbta3)
+
+```
+### Restructuring the data
+The table is stored backwards, we should restructure it to improve readability
+```{r estructmtba}
+
+mbta4 <- gather(mbta3, month, thou_riders, -mode)
+#change character to numeric data
+mbta4$thou_riders <- as.numeric(mbta4$thou_riders)
+mbta5 <- spread(mbta4, mode, thou_riders)
+glimpse(mbta5)
+head(mbta5)
+
+```
+```{r estruct2mtba}
+
+mbta6 <- separate(mbta5, month, c('year', 'month'))
+
+head(mbta6)
+
+```
+### Data entry error
+Thre seems to be an entry error in boat
+```{r entryerrormbta}
+
+summary(mbta6)
+hist(mbta6$Boat)
+
+```
+Fixing the error
+```{r entryerror}
+
+i <- which(mbta6$Boat == 40)
+
+
+mbta6$Boat[i] <- 4
+
+
+hist(mbta6$Boat)
+
+```
+
+### Plot the data
+```{r plottingmbta}
+
+mbta_all <- mbta6 %>%
+  unite(year_mon, year, month, sep = "") %>%
+  gather(mode, thou_riders, -year_mon)
+
+ggplot(mbta_all, aes(x = year_mon, y = thou_riders, col = mode)) + geom_point() + 
+  scale_x_discrete(name = "Month", breaks = c(200701, 200801, 200901, 201001, 201101)) +  
+  scale_y_continuous(name = "Avg Weekday Ridership (thousands)")
+```
+
+## World Food Facts Sales Dataset
+
+Data Cleaning of messy World Food Facts
+```{r loadfood}
+url_food <- 'http://s3.amazonaws.com/assets.datacamp.com/production/course_1294/datasets/food.csv'
+food <- fread(url_food)
+
+food <- data.frame(food)
+glimpse(food)
+```
+
+### Remove duplicate and useless info
+```{r removefood}
+duplicates <- c(4, 6, 11, 13, 15, 17, 18, 20, 22, 
+                24, 25, 28, 32, 34, 36, 38, 40, 
+                44, 46, 48, 51, 54, 65, 158)
+
+food2 <- food[,-duplicates]
+
+useless <- c(1, 2, 3, 32:41)
+food3 <- food2[,-useless]
+glimpse(food3)
+```
+
+### Correct missing data to 0
+```{r missingfood}
+i <- sapply(food3, is.numeric) # Identify all numeric variables
+food3[i] <- lapply(food3[i], as.character) 
+food3[is.na(food3)] <- 0 # Replace NA with 0
+food3[i] <- lapply(food3[i], as.factor) 
+glimpse(food3)
+```
