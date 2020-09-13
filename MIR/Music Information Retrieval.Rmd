@@ -1,0 +1,86 @@
+---
+title: "Music Information Retrieval"
+author: "Carlos Tejeda Ocampo A011170840"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Music Information Retrieval
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(chorrrds)
+
+library(chorddiag)
+
+```
+
+## Get chords from songs
+
+Getting the song and select a random sample. Then selecting the chords of the songs.
+
+```{r chords, echo=FALSE}
+
+songs <- "the-beatles" %>% 
+  chorrrds::get_songs() %>% 
+  dplyr::sample_n(5)        
+
+chords <- songs %>% 
+  dplyr::pull(url) %>%                     
+  purrr::map(chorrrds::get_chords) %>%     
+                                           
+  purrr::map_dfr(dplyr::mutate_if, is.factor, as.character)   %>% 
+  chorrrds::clean(message = FALSE)        
+                                            
+                                           
+
+chords %>% slice(1:10)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Calculate the most commong chords in each song
+
+
+```{r modechord, echo=FALSE}
+
+chords %>% 
+  dplyr::group_by(song) %>% 
+  dplyr::count(chord) %>%
+  dplyr::top_n(n, n = 3) %>%
+  dplyr::mutate(prop = scales::percent(n/sum(n)))
+```
+
+## Calculate the chord bigrams
+Generate pairs of chords that happened in sequence, by song, and analyze their frequencies
+
+```{r biagram, echo=FALSE}
+
+chords %>%
+  split(.$song) %>% 
+  purrr:::map(chorrrds::chords_ngram, n = 2) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::group_by(song) %>% 
+  dplyr::count(chords_ngram) %>% 
+  dplyr::top_n(n, n = 2)
+```
+
+## Plot chord diagram
+
+```{r diagram, echo=FALSE}
+
+comp <- chords %>% 
+  dplyr::mutate(seq = lead(chord)) %>% 
+  dplyr::filter(chord != seq) %>% 
+  dplyr::group_by(chord, seq) %>%  
+  dplyr::summarise(n = n())
+
+mat <- tidyr::spread(comp, key = chord, value = n, fill = 0)  
+mm <- as.matrix(mat[, -1]) 
+
+chorddiag::chorddiag(mm, showTicks = FALSE,
+                     palette = "Blues")
+```
