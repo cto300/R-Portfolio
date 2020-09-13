@@ -1,0 +1,320 @@
+---
+title: "Covid-Mexico"
+author: "Carlos Tejeda Ocampo A011170840"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+chooseCRANmirror(graphics=FALSE, ind=1)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  
+.scroll-100 {
+  max-height: 100px;
+  overflow-y: auto;
+  background-color: inherit;
+}
+```
+
+
+<!-- Loading libraries -->
+```{r loadl, warning=FALSE, message=FALSE, echo=FALSE}
+# Troubleshooting 
+library(conflicted)
+
+# Color palettes
+library(wesanderson) 
+
+# SQL queries
+library(sqldf) 
+
+# Create and format Tables
+library(knitr)
+library(kableExtra)
+
+# Balancing data
+library(ROSE)
+
+# Plotting
+library(ggplot2)
+library(plotly)
+
+# Random Forest
+library(randomForest)
+library(caret)
+library(e1071)
+
+#Others 
+library(dplyr)
+library(tidyverse)
+library(stringr)
+library(xtable)
+library(plyr)
+library(gridExtra)
+library(grid)
+library(caTools)
+```
+```{r Palettes, message=FALSE, warning=FALSE, echo=F}
+GrandBudapest2 <- wes_palette("GrandBudapest2", 1, type = "discrete")
+Moonrise3 <- wes_palette("Moonrise3", 1, type = "discrete")
+Moonrise1 <- wes_palette("Moonrise1", 1, type = "discrete")
+Royal1 <- wes_palette("Royal1", 1, type = "discrete")
+Zissou <- wes_palette("Zissou1", 5, type = "discrete")
+
+```
+```{r conflictedP, message=FALSE, warning=FALSE, echo=F}
+conflict_prefer("list","base")
+conflict_prefer("count","dplyr")
+```
+
+<!-- Loading and transforming data -->
+```{r loadd, message=FALSE, warning=FALSE, echo=FALSE}
+data <- read.csv("COVID19MX.csv")
+data$SEXO <- as.factor(data$SEXO)
+data$TIPO_PACIENTE <- as.factor(data$TIPO_PACIENTE)
+data$FECHA_INGRESO <- as.Date(data$FECHA_INGRESO)
+data$FECHA_SINTOMAS <- as.Date(data$FECHA_SINTOMAS)
+data$FECHA_DEF <- as.Date(data$FECHA_DEF)
+data$INTUBADO <- as.factor(data$INTUBADO)
+data$NEUMONIA <- as.factor(data$NEUMONIA)
+data$NACIONALIDAD <- as.factor(data$NACIONALIDAD)
+data$EMBARAZO <- as.factor(data$EMBARAZO)
+data$HABLA_LENGUA_INDIG <- as.factor(data$HABLA_LENGUA_INDIG)
+data$DIABETES <- as.factor(data$DIABETES)
+data$EPOC <- as.factor(data$EPOC)
+data$ASMA <- as.factor(data$ASMA)
+data$INMUSUPR <- as.factor(data$INMUSUPR)
+data$HIPERTENSION <- as.factor(data$HIPERTENSION)
+data$OTRA_COM <- as.factor(data$OTRA_COM)
+data$CARDIOVASCULAR <- as.factor(data$CARDIOVASCULAR)
+data$OBESIDAD <- as.factor(data$OBESIDAD)
+data$RENAL_CRONICA <- as.factor(data$RENAL_CRONICA)
+data$TABAQUISMO <- as.factor(data$TABAQUISMO)
+data$OTRO_CASO <- as.factor(data$OTRO_CASO)
+data$RESULTADO <- as.factor(data$RESULTADO)
+data$MIGRANTE <- as.factor(data$MIGRANTE)
+data$UCI <- as.factor(data$UCI)
+```
+
+# Data exploration & understanding {.tabset .tabset-pills}
+The data set used in this study has been obtained from the Mexican Secretariat of Health website. It is titled *Información referente a casos COVID-19 en México* and is updated daily. The version used was last updated on June 3, 2020; it contains a total of 303,461 cases of people tested for Covid-19. The results are divided into three categories: SARS-CoV-2 Positive (101,238 cases), SARS-CoV-2 Negative (157,354 cases), Result pending (44,869 cases).
+
+## Variables
+The original data set consists of 35 variables, but only the 28 listed and described below, have been explored.
+```{r colnames, echo=FALSE, message=FALSE, warning=FALSE}
+Variable <- c('ENTIDAD_UM','SEXO','TIPO_PACIENTE','FECHA_INGRESO','FECHA_SINTOMAS','FECHA_DEF','INTUBADO',
+              'NEUMONIA','EDAD','NACIONALIDAD','EMBARAZO','HABLA_LENGUA_INDIG','DIABETES','EPOC','ASMA',
+              'INMUSUPR','HIPERTENSION','OTRA_COM','CARDIOVASCULAR','OBESIDAD',
+              'RENAL_CRONICA','TABAQUISMO','OTRO_CASO','RESULTADO','MIGRANTE','PAIS_NACIONALIDAD',
+              'PAIS_ORIGEN','UCI')
+Description <- c('State where the person received medical attention.','Identifies the sex of the person. **Values:** 1 for woman, 2 for man, 99 for not specified.',
+                 'Identifies the type of medical attention that the person received. **Values:** 1 for a person that went home, 2 for a person that was admitted. 99 for not specified.',
+                 'Indicates the date when the person received medical attention.',
+                 'Indicates the date when the person started showing symptoms.',
+                 'Indicates the date when the person passed away.',
+                 'Indicates if the person was intubated. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with pneumonia. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates the age of the person.',
+                 'Indicates the nationality of the person. **Values:** 1 for Mexican, 2 for foreign, 99 for not specified.',
+                 'Indicates if the person was pregnant. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person speaks an indigenous language. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with diabetes. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with chronic obstructive pulmonary disease (COPD). **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with asthma. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person presents immunosuppression. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with hypertension. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with other diseases. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with cardiovascular diseases. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with obesity. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person was diagnosed with chronic renal failure. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person has a smoking habit. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates if the person had contact with another person diagnosed with SARS-CoV-2. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Indicates the results of the SARS-CoV-2 test. **Values:** 1 for SARS-CoV-2 positive, 2 for SARS-CoV-2 negative, 3 for result pending.',
+                 'Indicates if the person is an immigrant. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.',
+                 'Textually specifies the nationality of the patient. 99 if the nationality is unknown.',
+                 'Textually specifies the country from which the person arrived to Mexico. 97 if it does not apply.',
+                 'Indicates if the person was admitted to the Intensive Care Unit. **Values:** 1 for yes, 2 for no, 97 for does not apply, 98 if it is unknown, 99 for not specified.')
+vardesc <- data.frame(Variable, Description)
+```
+```{r vartable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+kable(cbind(vardesc)) %>%
+  kable_styling(bootstrap_options = c("hover")) %>%
+  column_spec(1, background = "#F5F5F5") %>%
+  scroll_box(height = "400px")
+```
+<!-- Subset original -->
+```{r subsetinicial, echo=FALSE, message=FALSE, warning=FALSE}
+df <- data[c(3:35)]
+df$ORIGEN <- df$SECTOR <- df$ENTIDAD_NAC <- df$ENTIDAD_RES <- df$MUNICIPIO_RES <- NULL
+```
+<!-- Subset Covid Known Results -->
+```{r subsetCovidPositive, echo=FALSE, message=FALSE, warning=FALSE}
+df_kr <- sqldf("SELECT * FROM df WHERE resultado <> '3'")
+df_kr$RESULTADO <- as.character(df_kr$RESULTADO)
+df_kr$RESULTADO <- as.factor(df_kr$RESULTADO)
+df_kr$PAIS_NACIONALIDAD <- as.factor(df_kr$PAIS_NACIONALIDAD)
+df_kr$PAIS_ORIGEN <- as.factor(df_kr$PAIS_ORIGEN)
+```
+
+
+## Histograms {.tabset .tabset-pills}
+### Positive cases per date of confirmation
+As previously mentioned, the data set used in this study reports a total of 101,238 confirmed COVID-19 cases in Mexico. The histogram below shows their distribution as reported by the Secretariat of Health.
+
+```{r confirmedhist, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+conflict_prefer("margin", "ggplot2")
+df_pos <- sqldf("select * from df where resultado = '1'")
+ggplot(df_pos, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill=Moonrise1, color=Moonrise1)  + 
+  geom_density(aes(y=..count..), alpha=0, color="black", position="stack") + 
+  labs(title="Cases per date of confirmation", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0)))
+```
+
+### States with the most cases
+The states with the most cases up to June 3, 2020 are Mexico City, the State of Mexico, Baja California, Tabasco, Veracruz and Sinaloa, in that order. The total number of cases of each state is shown below as well as their graphic representations.
+
+```{r statesmostpos1, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+df_poscdmx <- sqldf("select * from df_pos where entidad_um in ('Ciudad de Mexico')")
+df_posedomx <- sqldf("select * from df_pos where entidad_um in ('Estado de Mexico')")
+df_posbc <- sqldf("select * from df_pos where entidad_um in ('Baja California')")
+df_postab <- sqldf("select * from df_pos where entidad_um in ('Tabasco')")
+df_posver <- sqldf("select * from df_pos where entidad_um in ('Veracruz')")
+df_possin <- sqldf("select * from df_pos where entidad_um in ('Sinaloa')")
+```
+```{r statesmostpos2, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+ggplot(df_poscdmx, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#3B9AB2", color="#3B9AB2") + 
+  labs(title="Mexico City", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> poscdmx
+                     
+ggplot(df_posedomx, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#78B7C5", color="#78B7C5") + 
+  labs(title="State of Mexico", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> posedomx
+                     
+ggplot(df_posbc, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#EBCC2A", color="#EBCC2A") + 
+  labs(title="Baja California", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> posbc
+                     
+ggplot(df_postab, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#E1AF00", color="#E1AF00") + 
+  labs(title="Tabasco", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> postab
+
+ggplot(df_posver, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#F21A00", color="#F21A00") + 
+  labs(title="Veracruz", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> posver
+
+ggplot(df_possin, aes(x=FECHA_INGRESO)) + geom_bar(aes(y=..count..), alpha=0.5, fill="#972D15", color="#972D15") + 
+  labs(title="Sinaloa", x="Date", y = "Count") + 
+  theme_bw() + theme(legend.title=element_blank(), legend.text = element_text(size = 7), 
+                     legend.position="top", legend.key.size = unit(10,"points"), 
+                     legend.margin = margin(c(0, 0, -5, 0))) -> possin
+
+grid.arrange(poscdmx, posedomx, posbc, postab, posver, possin, ncol = 2)
+```
+```{r statesmostpos3, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+State <- c('Mexico City','State of Mexico','Baja California','Tabasco','Veracruz','Sinaloa')
+Confirmed_cases <- c(32906,10824,5545,4829,4250,3917)
+statesmostpos <- data.frame(State,Confirmed_cases)
+
+kable(cbind(statesmostpos)) %>%
+  kable_styling(bootstrap_options = c("hover")) %>%
+  column_spec(1, background = "#F5F5F5") 
+```
+
+### Deaths per date of confirmation
+Up to Jun 3, 2020, a total of 11,728 deaths were confirmed: 3,892 were female, while 7,836 were male. The histogram below shows their distribution as reported by the Secretariat of Health.
+
+```{r deathshist, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+df_death <- sqldf("select * from df_pos where fecha_def is not null")
+ggplot(df_death, aes(x=FECHA_DEF)) + geom_bar(aes(y=..count..), alpha=0.4, fill=Royal1, color=Royal1) + geom_density(aes(y=..count..), alpha=0, color="black", position="stack") + labs(title="Deaths per date of confirmation", x="Date", y = "Count") + theme_bw()
+```
+
+
+# Construction of data set
+This study focuses on using Random Forests to predict if a person that has been diagnosed positive for SARS-CoV-2 or Covid19 and has been hospitalized, would be admitted to the Intensive Care Unit (ICU). The variables used in the Random Forest relate to social and other medical conditions (diseases), which are the following: Age, sex, diabetes, COPD, asthma, immunosupression, hypertension, cardiovascular diseases, obesity, chronic renal failure, smoking, contact with other SARS-CoV-2 case(s). The subset comprising the aforementioned attributes consists 17,835 cases; values regarding unknown, non-applicable, and not specified, were omitted as they did not serve the purposes of this classification.
+
+Further exploration of the data set involved making sure that all of the factor levels were represented by people that were and were not admitted into the ICU. Which is shown below:
+```{r factorcheckdataset, message=FALSE, warning=FALSE, echo=FALSE}
+dfkr <- df_kr
+
+dfkr$FECHA_INGRESO <- dfkr$FECHA_SINTOMAS <- dfkr$FECHA_DEF <-dfkr$INTUBADO <- NULL
+dfkr$NACIONALIDAD <- dfkr$HABLA_LENGUA_INDIG <- dfkr$NEUMONIA <- dfkr$OTRA_COM <- NULL
+dfkr$MIGRANTE <- dfkr$PAIS_NACIONALIDAD <- dfkr$PAIS_ORIGEN <- NULL
+dfkr$EMBARAZO <- NULL
+
+dfkr <- sqldf("SELECT * FROM dfkr
+      WHERE diabetes <> '98' AND epoc <> '98' AND asma <> '98' AND INMUSUPR <> '98'
+      AND hipertension <> '98' AND cardiovascular <> '98' AND obesidad <> '98'
+      AND renal_cronica <> '98' AND tabaquismo <> '98' AND otro_caso <> '99'
+      AND uci not in ('97','99')")
+
+dfkr$DIABETES <- as.character(dfkr$DIABETES)
+dfkr$DIABETES <- as.factor(dfkr$DIABETES)
+dfkr$EPOC <- as.character(dfkr$EPOC)
+dfkr$EPOC <- as.factor(dfkr$EPOC)
+dfkr$ASMA <- as.character(dfkr$ASMA)
+dfkr$ASMA <- as.factor(dfkr$ASMA)
+dfkr$INMUSUPR <- as.character(dfkr$INMUSUPR)
+dfkr$INMUSUPR <- as.factor(dfkr$INMUSUPR)
+dfkr$HIPERTENSION <- as.character(dfkr$HIPERTENSION)
+dfkr$HIPERTENSION <- as.factor(dfkr$HIPERTENSION)
+dfkr$CARDIOVASCULAR <- as.character(dfkr$CARDIOVASCULAR)
+dfkr$CARDIOVASCULAR <- as.factor(dfkr$CARDIOVASCULAR)
+dfkr$OBESIDAD <- as.character(dfkr$OBESIDAD)
+dfkr$OBESIDAD <- as.factor(dfkr$OBESIDAD)
+dfkr$RENAL_CRONICA <- as.character(dfkr$RENAL_CRONICA)
+dfkr$RENAL_CRONICA <- as.factor(dfkr$RENAL_CRONICA)
+dfkr$TABAQUISMO <- as.character(dfkr$TABAQUISMO)
+dfkr$TABAQUISMO <- as.factor(dfkr$TABAQUISMO)
+dfkr$OTRO_CASO <- as.character(dfkr$OTRO_CASO)
+dfkr$OTRO_CASO <- as.factor(dfkr$OTRO_CASO)
+dfkr$UCI <- as.character(dfkr$UCI)
+dfkr$UCI <- as.factor(dfkr$UCI)
+
+df_admpositive <- sqldf("Select * from dfkr where tipo_paciente ='2' AND resultado = '1'")
+df_admpositive$TIPO_PACIENTE <- df_admpositive$RESULTADO <- NULL
+df_admpositive$ENTIDAD_UM <- NULL
+```
+
+```{r factorcheck, message=FALSE, warning=FALSE, echo=FALSE, fig.align="center"}
+xtabs(~ UCI + UCI, data=df_admpositive)
+xtabs(~ UCI + SEXO, data=df_admpositive)
+xtabs(~ UCI + DIABETES, data=df_admpositive)
+xtabs(~ UCI + EPOC, data=df_admpositive)
+xtabs(~ UCI + ASMA, data=df_admpositive)
+xtabs(~ UCI + INMUSUPR, data=df_admpositive)
+xtabs(~ UCI + HIPERTENSION, data=df_admpositive)
+xtabs(~ UCI + CARDIOVASCULAR, data=df_admpositive)
+xtabs(~ UCI + OBESIDAD, data=df_admpositive)
+xtabs(~ UCI + RENAL_CRONICA, data=df_admpositive)
+xtabs(~ UCI + TABAQUISMO, data=df_admpositive)
+xtabs(~ UCI + OTRO_CASO, data=df_admpositive)
+```
+
+As can be seen, not many of the variables considered were equally or close to equally represented by people. To balance the data, it was decided to both undersample and oversample.
+
+
+# References
+1. Secretaría de Salud. "Información referente a casos COVID-19 en México." Accessed on 2020-06-03 from https://datos.gob.mx/busca/dataset/informacion-referente-a-casos-covid-19-en-mexico, 2020
+
