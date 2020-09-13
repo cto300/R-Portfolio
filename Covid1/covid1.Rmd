@@ -1,0 +1,148 @@
+---
+title: "Covid_Analysis"
+author: "Carlos Tejeda Ocampo A011170840"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Covid Analysis
+
+```{r libraries, warning=FALSE, message=FALSE}
+options(stringsAsFactors=F)
+library(DESeq2)
+library(tidyverse)
+library(dplyr)
+library(GEOquery)
+
+```
+
+## Covid Analysis
+
+```{r loadata}
+load("GSE147507_datos_covid.RData")
+
+###Explore data
+colnames(datos_covid)
+head(datos_covid)
+
+##Separate samples treated with covid and influenza/rsv
+covid_data <- data.matrix(datos_covid[,1:12])
+RSV_IAV_data <- data.matrix(datos_covid[,13:20])
+
+```
+
+
+##Filter genes based on counts
+
+```{r filter}
+##Covid Data set 
+covid_count_filter <- apply(covid_data, 1, function(x) length(which(x >= 5)))
+table(covid_count_filter)
+dim(covid_data)
+###Keep genes with at least 5 counts in 3 samples or more
+covid_data <- covid_data[which(covid_count_filter >= 3),]
+dim(covid_data)
+####
+###Influenza/rsv data set 
+RSV_IAV_filter <- apply(RSV_IAV_data, 1, function(x) length(which(x >= 5)))
+table(RSV_IAV_filter)
+dim(RSV_IAV_data)
+###Keep genes with at least 5 counts in 3 samples or more
+RSV_IAV_data <- RSV_IAV_data[which(RSV_IAV_filter >= 3),]
+dim(RSV_IAV_data)
+
+```
+
+## Function to Run DeSeq2
+
+```{r deseqfun}
+DESeq_func <- function(matrix_c, classes_c, classes_names=NA){
+	classes_1 <- which(classes_c == 1)
+	classes_0 <- which(classes_c == 0)
+	aux_data <- matrix_c[,c(classes_1,classes_0)]
+	aux_desc <- data.frame(condition=c(rep("B",length(classes_1)),rep("A",length(classes_0))), type=rep("paired-end",c(length(classes_1)+length(classes_0))))
+	aux_dds <- DESeqDataSetFromMatrix(countData = aux_data, colData = aux_desc, design = ~condition)
+	aux_dds <- DESeq(aux_dds)
+	aux_results <- as.data.frame(results(aux_dds))
+	aux_results <- aux_results[order(aux_results$pvalue),]
+	aux_results
+}
+
+```
+
+## Apply DESeq between A) Mock vs infected covid, B) Covid (infected) vs influenza C) Covid (infected) vs RSV virus A) Mock vs Infected Covid 
+
+```{r deseq}
+aux_classes_mockVScovid  <- rep(1, times=ncol(covid_data))
+aux_classes_mockVScovid
+aux_classes_mockVScovid[grep(pattern="mock", x=colnames(covid_data))] <- 0
+##mock samples are set to 0 
+aux_classes_mockVScovid
+##Run DESeq2
+covid_vs_mock_results <- DESeq_func(covid_data,aux_classes_mockVScovid)
+covid_vs_mock_results[1:10,]
+## plot p-value 
+p_value_mock_vs_covid <- covid_vs_mock_results$pvalue
+hist(p_value_mock_vs_covid, main = "P-Values Mock vs Infected")
+## 201 genes prsent a value of .05, 
+sum(p_value_mock_vs_covid < .05)
+#reduces to 73 
+sum(p_value_mock_vs_covid < .01)
+
+```
+
+## Covid (infected) vs influenza
+
+```{r covidvsinf}
+aux_classes_mockVScovid  <- rep(1, times=ncol(covid_data))
+aux_classes_mockVScovid
+aux_classes_mockVScovid[grep(pattern="mock", x=colnames(covid_data))] <- 0
+##mock samples are set to 0 
+aux_classes_mockVScovid
+##Run DESeq2
+covid_vs_mock_results <- DESeq_func(covid_data,aux_classes_mockVScovid)
+covid_vs_mock_results[1:10,]
+## plot p-value 
+p_value_mock_vs_covid <- covid_vs_mock_results$pvalue
+hist(p_value_mock_vs_covid, main = "P-Values Mock vs Infected")
+## 201 genes prsent a value of .05, 
+sum(p_value_mock_vs_covid < .05)
+#reduces to 73 
+sum(p_value_mock_vs_covid < .01)
+
+```
+
+## Covid (infected) vs RSV 
+
+```{r covidvsrsv}
+##Subsetting innfected covid samples with RSV
+RSV_infected  <- RSV_IAV_data[,-c(5:8)]
+covid_infected_2 <- covid_data[,-c(1,2,3,7,8,9)]
+common_2 <- intersect(row.names(covid_infected_2),row.names(RSV_infected))
+###combine both subsets
+RSV_infected <- RSV_infected[common_2,]
+covid_infected_2 <- covid_infected_2[common_2,]
+covid_vs_rsv <- cbind(covid_infected_2,RSV_infected)
+###########
+aux_classes_RSV_VS_Covid <- rep(1, times=ncol(covid_vs_rsv))
+aux_classes_RSV_VS_Covid
+aux_classes_RSV_VS_Covid[grep(pattern="sv", x=colnames(covid_vs_rsv))] <- 0
+##Influenza samples are set to 0 
+aux_classes_RSV_VS_Covid
+##Run DESeq2
+covid_vs_RSV_results <- DESeq_func(covid_vs_rsv,aux_classes_RSV_VS_Covid)
+covid_vs_RSV_results[1:10,]
+###Plot p-values
+p_value_RSV_vs_covid <- covid_vs_RSV_results$pvalue
+hist(p_value_RSV_vs_covid, main = "P-Values RSV vs Covid")
+## 7879 genes prsent a value of .05, 
+sum(p_value_RSV_vs_covid < .05)
+#reduces to 6190 
+sum(p_value_RSV_vs_covid < .01)
+
+```
+
