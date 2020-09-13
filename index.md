@@ -10,6 +10,8 @@
 
 ##[Music Information Retrieval](https://htmlpreview.github.io/?https://github.com/cto300/R-Portfolio/blob/master/MIR/Music-Information-Retrieval.html)
 
+##[Explainable Machine Learning with LIME and H2O in R](https://htmlpreview.github.io/?https://github.com/cto300/R-Portfolio/blob/master/Explainable%20ML/Explainable%20ML.html)
+
 
 
 
